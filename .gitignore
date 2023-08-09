@@ -7,3 +7,4 @@
 *.exc
 *.saffx
 *.deobf
+__pycache__
