@@ -1,0 +1,9 @@
+*.jar
+*.rgs
+*.srg
+*.csv
+*.conf
+*.txt
+*.exc
+*.saffx
+*.deobf

@@ -9,7 +9,7 @@ Mapper is a python script which generates Enigma mappings from MCP's old and rec
 ## Installation
 Clone the repository using the following command :
 ```
-git clone https://github.com/computerspieler/Mapper.git
+git clone --recurse-submodules https://github.com/computerspieler/Mapper.git
 ```
 Then copy minecraft.jar and minecraft_server.jar in the same directory as the script, as well as the content of the conf directory of MCP.
 And finally configure and run the script, you should obtain two files : "client.deobf" and "server.deobf", those files are your mappings !
