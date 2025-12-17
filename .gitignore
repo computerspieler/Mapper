@@ -8,3 +8,4 @@
 *.saffx
 *.deobf
 __pycache__
+*.zip
