@@ -153,8 +153,6 @@ class JarFile:
 
 # Read the jar files
 # Necessary in order to get fields' signatures
-import Krakatau.Krakatau
-from Krakatau.Krakatau import script_util
 from Krakatau.Krakatau.classfileformat.reader import Reader
 from Krakatau.Krakatau.classfileformat.classdata import ClassData
 from Krakatau.Krakatau.assembler.disassembly import Disassembler
@@ -187,10 +185,10 @@ def addSymbols(archive, jar, already_deobf = False):
 			if len(line) <= 2: continue
 			while line[-1] == '\n': line = line[:-1]
 			while line[-1] == ' ' or line[-1] == '\t': line = line[:-1]
-			const_match = re.search("^\\.const ([\[\]a-zA-Z0-9]+) = (.*)$", line)
-			class_match = re.search("^\\.class.* ([a-zA-Z0-9/$_]+)$", line)
-			field_match = re.search("^\\.field.* ([a-zA-Z0-9_]+) ([a-zA-Z0-9()\[\]/;]+)", line)
-			method_match = re.search("^\\.method.* ([a-zA-Z0-9_/<>$]+) : ([a-zA-Z0-9()\[\]/$;]+)", line)
+			const_match = re.search(r"^\.const ([^ ]+) = (.*)$", line)
+			class_match = re.search(r"^\.class.* ([^ ]+)$", line)
+			field_match = re.search(r"^\.field.* ([^ ]+) ([^ ]+)", line)
+			method_match = re.search(r"^\.method.* ([^ ]+) : ([^ ]+)", line)
 			if class_match != None:
 				classname = class_match.group(1)
 				jar.addClass(classname)

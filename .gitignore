@@ -9,3 +9,6 @@
 *.deobf
 __pycache__
 *.zip
+
+# Editor specific
+.vscode

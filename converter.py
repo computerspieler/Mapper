@@ -1,40 +1,31 @@
-# Copyright (C) 2022 Computerspieler
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#!/usr/bin/env python3
+# This script converts MCP mappings into Enigma mapping
 
 # ==== CONFIGURATION ====
 # Note: The first column's index is 0
 
 # classes.csv configuration
-CLIENT_OBF_CLASS_COL=2	# Collumn of the obfuscated name for the client jar
-SERVER_OBF_CLASS_COL=4	# Collumn of the obfuscated name for the server jar
-NON_OBF_CLASS_COL=0		# Collumn of the correct name
+CLIENT_OBF_CLASS_COL=2	# Column of the obfuscated name for the client jar
+SERVER_OBF_CLASS_COL=4	# Column of the obfuscated name for the server jar
+NON_OBF_CLASS_COL=0		# Column of the correct name
 CSV_CLASS_START_ROW=4	# Number of rows to skip at the beginning
 
 # methods.csv configuration
-CLIENT_OBF_METHOD_COL=1	# Collumn of the obfuscated name for the client jar
-SERVER_OBF_METHOD_COL=3	# Collumn of the obfuscated name for the server jar
-NON_OBF_METHOD_COL=4	# Collumn of the correct name
+CLIENT_OBF_METHOD_COL=1	# Column of the obfuscated name for the client jar
+SERVER_OBF_METHOD_COL=3	# Column of the obfuscated name for the server jar
+NON_OBF_METHOD_COL=4	# Column of the correct name
 CSV_METHOD_START_ROW=4	# Number of rows to skip at the beginning
 
 # fields.csv configuration
-CLIENT_OBF_FIELD_COL=2	# Collumn of the obfuscated name for the client jar
-SERVER_OBF_FIELD_COL=5	# Collumn of the obfuscated name for the server jar
-NON_OBF_FIELD_COL=6		# Collumn of the correct name
+CLIENT_OBF_FIELD_COL=2	# Column of the obfuscated name for the client jar
+SERVER_OBF_FIELD_COL=5	# Column of the obfuscated name for the server jar
+NON_OBF_FIELD_COL=6		# Column of the correct name
 CSV_FIELD_START_ROW=3	# Number of rows to skip at the beginning
 
 # newids.csv configuration
-CLIENT_OBF_NEWIDS_COL=0	# Collumn of the obfuscated name for the client jar
-SERVER_OBF_NEWIDS_COL=1	# Collumn of the obfuscated name for the server jar
-NON_OBF_NEWIDS_COL=2	# Collumn of the correct name
+CLIENT_OBF_NEWIDS_COL=0	# Column of the obfuscated name for the client jar
+SERVER_OBF_NEWIDS_COL=1	# Column of the obfuscated name for the server jar
+NON_OBF_NEWIDS_COL=2	# Column of the correct name
 CSV_NEWIDS_START_ROW=0	# Number of rows to skip at the beginning
 
 PACKAGE_DEFAULT="net/minecraft/src/"
@@ -49,10 +40,10 @@ PACKAGE_CONSIDERED_DEOBFUSCATED=[
 client_jar.filtering = True
 server_jar.filtering = True
 
-# Start
-import functools
+# ==== END OF CONFIGURATION ====
+
 import os.path
-import time, zipfile, sys
+import zipfile
 import csv
 
 from common import *
@@ -145,13 +136,13 @@ def parse_names(name):
 	return (name[:name.rfind('/')], name[name.rfind('/') + 1:])
 
 def parse_line_rgs(line, jar):
-	mclass_match = re.search("^\\.class_map ([a-zA-Z][a-zA-Z0-9_/]*) ([a-zA-Z][a-zA-Z0-9_/]*)$", line)
-	mfield_match = re.search("^\\.field_map ([a-zA-Z0-9_/$]+) ([a-zA-Z0-9_]+)$", line)
-	mmethod_match = re.search("^\\.method_map ([a-zA-Z0-9_/$]+) ([a-zA-Z0-9()\[\]/;]+) ([a-zA-Z0-9_]+)$", line)
+	mclass_match = re.search(r"^\.class_map ([^ ]*) ([^ ]*)$", line)
+	mfield_match = re.search(r"^\.field_map ([^ ]+) ([^ ]+)$", line)
+	mmethod_match = re.search(r"^\.method_map ([^ ]+) ([^ ]+) ([^ ]+)$", line)
 
-	class_match = re.search("^\\.class ([a-zA-Z][a-zA-Z0-9_/]*)$", line)
-	field_match = re.search("^\\.field ([a-zA-Z0-9_/]+) ([a-zA-Z0-9()\[\]/;]+)$", line)
-	method_match = re.search("^\\.method ([a-zA-Z0-9_/]+) ([a-zA-Z0-9()\[\]/;]+)$", line)
+	class_match = re.search(r"^\.class ([^ ]+)$", line)
+	field_match = re.search(r"^\.field ([^ ]+) ([^ ]+)$", line)
+	method_match = re.search(r"^\.method ([^ ]+) ([^ ]+)$", line)
 	
 	if mclass_match is not None:
 		jar.setClassName(mclass_match.group(1), mclass_match.group(2))
@@ -176,9 +167,9 @@ def parse_line_rgs(line, jar):
 		jar.setMethodName(classname, name, signature, name)
 
 def parse_line_srg(line, jar):
-	class_match = re.search ("^CL: ([a-zA-Z][a-zA-Z0-9_/]*) ([a-zA-Z][a-zA-Z0-9_/]*)$", line)
-	field_match = re.search ("^FD: ([a-zA-Z0-9_/]+) ([a-zA-Z0-9()\[\]/;]+)$", line)
-	method_match = re.search("^MD: ([a-zA-Z0-9_/]+) ([a-zA-Z0-9()\[\]/;]+) ([a-zA-Z0-9_/]+)", line)
+	class_match = re.search (r"^CL: ([^ ]+) ([^ ]+)$", line)
+	field_match = re.search (r"^FD: ([^ ]+) ([^ ]+)$", line)
+	method_match = re.search(r"^MD: ([^ ]+) ([^ ]+) ([^ ]+)", line)
 
 	if class_match is not None:
 		jar.setClassName(class_match.group(1), class_match.group(2))
