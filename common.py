@@ -168,7 +168,11 @@ def readArchive(archive, name):
 		return f.read()
 
 def addSymbols(archive, jar, already_deobf = False):
-	for f in [name.encode('utf8') for name in archive.namelist() if name.endswith(".class")]:
+	for f in archive.namelist():
+		if not f.endswith(".class"):
+			continue
+		
+		f = f.encode('utf8')
 		data = readArchive(archive, f)
 		# Warning! Skipping the file since it is not a valid classfile.
 		if not data.startswith(b'\xca\xfe\xba\xbe'):

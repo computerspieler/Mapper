@@ -34,48 +34,80 @@ PACKAGE_CONSIDERED_DEOBFUSCATED=[
 	"com/jcraft/jorbis",
 ]
 
-# Filtering will filter out every function without a proper name
-# Useful for people trying to expand the list of methods and fields
-# Not recommanded for modders
-client_jar.filtering = True
-server_jar.filtering = True
-
 # ==== END OF CONFIGURATION ====
 
+import sys
 import os.path
 import zipfile
 import csv
+import argparse
 
 from common import *
 
-client_jar = JarFile()
-server_jar = JarFile()
+client_jar = None
+server_jar = None
 
-print("Read the client JAR file")
-with zipfile.ZipFile("minecraft.jar", 'r') as archive:
-	addSymbols(archive, client_jar)
+parser = argparse.ArgumentParser(
+	prog="converter.py",
+	description="Converts MCP version into Enigma parser"
+)
 
-print("Read the server JAR file")
-with zipfile.ZipFile("minecraft_server.jar", 'r') as archive:
-	addSymbols(archive, server_jar)
+parser.add_argument("mcp_archive")
+parser.add_argument("-c", "--client", default="")
+parser.add_argument("-s", "--server", default="")
+parser.add_argument('-f', '--filtering',
+	action='store_true',
+	help="""This option will filter out every temporary names for fields or methods.
+Useful for people trying to expand the list of methods and fields, not recommanded for modders""")
+args = parser.parse_args()
 
-if os.path.exists("newids.csv"):
-	print("Read the new ids'")
-	with open("newids.csv", "r") as csv_file:
+if not args.server and not args.client:
+	print("No minecraft clients, nor server have been provided, leaving")
+	sys.exit(-1)
+
+if args.client:
+	client_jar = JarFile()
+	client_jar.filtering = args.filtering
+	print("Read the client JAR file")
+	with zipfile.ZipFile(args.client, 'r') as archive:
+		addSymbols(archive, client_jar)
+
+if args.server:
+	server_jar = JarFile()
+	server_jar.filtering = args.filtering
+	print("Read the server JAR file")
+	with zipfile.ZipFile(args.server, 'r') as archive:
+		addSymbols(archive, server_jar)
+
+def addCSVToFilter(path: str,
+	index_start_row: int,
+	column_client_obfuscation: int
+	column_server_obfuscation: int,
+	column_deobfuscated: int
+):
+	with open(path, "r") as csv_file:
 		reader = csv.reader(csv_file)
-		for i in range(CSV_NEWIDS_START_ROW):
+		for i in range(index_start_row):
 			next(csv_file)
 		for row in reader:
 			if len(row) == 0:
 				continue
 			# If this is a name present in the client
-			if row[CLIENT_OBF_NEWIDS_COL] != "*":
-				client_jar.addToFilter(row[CLIENT_OBF_NEWIDS_COL], row[NON_OBF_NEWIDS_COL])
+			if row[column_client_obfuscation] != "*" and client_jar:
+				client_jar.addToFilter(row[column_client_obfuscation], row[column_deobfuscated])
 			# If this is a name present in the server
-			if row[SERVER_OBF_NEWIDS_COL] != "*":
-				server_jar.addToFilter(row[SERVER_OBF_NEWIDS_COL], row[NON_OBF_NEWIDS_COL])
+			if row[column_server_obfuscation] != "*" and server_jar:
+				server_jar.addToFilter(row[column_server_obfuscation], row[column_deobfuscated])
 
 		csv_file.close()
+
+if os.path.exists("newids.csv"):
+	print("Read the new ids'")
+	addCSVToFilter("newids.csv",
+		CLIENT_OBF_NEWIDS_COL,
+		SERVER_OBF_NEWIDS_COL,
+		NON_OBF_NEWIDS_COL
+	)
 
 if os.path.exists("classes.csv"):
 	print("Read the classes' names")
@@ -87,55 +119,35 @@ if os.path.exists("classes.csv"):
 			if len(row) == 0:
 				continue
 			# If this is a name present in the client
-			if row[CLIENT_OBF_CLASS_COL] != "*":
+			if row[CLIENT_OBF_CLASS_COL] != "*" and client_jar:
 				client_jar.setClassName(row[CLIENT_OBF_CLASS_COL], row[NON_OBF_CLASS_COL])
 			# If this is a name present in the server
-			if row[SERVER_OBF_CLASS_COL] != "*":
+			if row[SERVER_OBF_CLASS_COL] != "*" and server_jar:
 				server_jar.setClassName(row[SERVER_OBF_CLASS_COL], row[NON_OBF_CLASS_COL])
 
 		csv_file.close()
 
 if os.path.exists("methods.csv"):
 	print("Read the methods' names")
-	with open("methods.csv", "r") as csv_file:
-		reader = csv.reader(csv_file)
-		for i in range(CSV_METHOD_START_ROW):
-			next(csv_file)
-		for row in reader:
-			if len(row) == 0:
-				continue
-			# If this is a name present in the client
-			if row[CLIENT_OBF_METHOD_COL] != "*":
-				client_jar.addToFilter(row[CLIENT_OBF_METHOD_COL], row[NON_OBF_METHOD_COL])
-			# If this is a name present in the server
-			if row[SERVER_OBF_METHOD_COL] != "*":
-				server_jar.addToFilter(row[SERVER_OBF_METHOD_COL], row[NON_OBF_METHOD_COL])
-
-		csv_file.close()
+	addCSVToFilter("methods.csv",
+		CLIENT_OBF_METHOD_COL,
+		SERVER_OBF_METHOD_COL,
+		NON_OBF_METHOD_COL
+	)
 
 if os.path.exists("fields.csv"):
 	print("Read the fields' names")
-	with open("fields.csv", "r") as csv_file:
-		reader = csv.reader(csv_file)
-		for i in range(CSV_FIELD_START_ROW):
-			next(csv_file)
-		for row in reader:
-			if len(row) == 0:
-				continue
-			# If this is a name present in the client
-			if row[CLIENT_OBF_FIELD_COL] != "*":
-				client_jar.addToFilter(row[CLIENT_OBF_FIELD_COL], row[NON_OBF_FIELD_COL])
-			# If this is a name present in the server
-			if row[SERVER_OBF_FIELD_COL] != "*":
-				server_jar.addToFilter(row[SERVER_OBF_FIELD_COL], row[NON_OBF_FIELD_COL])
-
-		csv_file.close()
+	addCSVToFilter("fields.csv",
+		CLIENT_OBF_FIELD_COL,
+		SERVER_OBF_FIELD_COL,
+		NON_OBF_FIELD_COL
+	)
 
 # Parse the RGS file
 def parse_names(name):
 	return (name[:name.rfind('/')], name[name.rfind('/') + 1:])
 
-def parse_line_rgs(line, jar):
+def parse_line_rgs(line: str, jar):
 	mclass_match = re.search(r"^\.class_map ([^ ]*) ([^ ]*)$", line)
 	mfield_match = re.search(r"^\.field_map ([^ ]+) ([^ ]+)$", line)
 	mmethod_match = re.search(r"^\.method_map ([^ ]+) ([^ ]+) ([^ ]+)$", line)
@@ -183,23 +195,23 @@ def parse_line_srg(line, jar):
 		_, deobf_name = parse_names(method_match.group(3))
 		jar.setMethodName(classname, name, signature, deobf_name)
 
-if os.path.exists("minecraft.rgs"):
+if os.path.exists("minecraft.rgs") and client_jar:
 	print("Parse minecraft.rgs")
 	with open("minecraft.rgs") as rgs_file:
 		for line in rgs_file:
 			parse_line_rgs(line, client_jar)
-if os.path.exists("minecraft.srg"):
+if os.path.exists("minecraft.srg") and client_jar:
 	print("Parse minecraft.srg")
 	with open("minecraft.srg") as srg_file:
 		for line in srg_file:
 			parse_line_srg(line, client_jar)
 
-if os.path.exists("minecraft_server.rgs"):
+if os.path.exists("minecraft_server.rgs") and server_jar:
 	print("Parse minecraft_server.rgs")
 	with open("minecraft_server.rgs") as rgs_file:
 		for line in rgs_file:
 			parse_line_rgs(line, server_jar)
-if os.path.exists("minecraft_server.srg"):
+if os.path.exists("minecraft_server.srg") and server_jar:
 	print("Parse minecraft_server.srg")
 	with open("minecraft_server.srg") as srg_file:
 		for line in srg_file:
@@ -226,8 +238,10 @@ def updateSignatures(jar):
 			jar.setMethodSignature(c, om, signature, updateSign(jar, signature))
 
 print("Update signatures")
-updateSignatures(client_jar)
-updateSignatures(server_jar)
+if client_jar:
+	updateSignatures(client_jar)
+if server_jar:
+	updateSignatures(server_jar)
 
 # Clean the map from unupdated 
 def removeUselessEntries(jar):
@@ -249,8 +263,10 @@ def removeUselessEntries(jar):
 			jar.classes.pop(c)
 
 print("Clean the map")
-removeUselessEntries(client_jar)
-removeUselessEntries(server_jar)
+if client_jar:
+	removeUselessEntries(client_jar)
+if server_jar:
+	removeUselessEntries(server_jar)
 
 print("Move some classes into the default package")
 def moveToDefaultPackage(jar):
@@ -260,12 +276,17 @@ def moveToDefaultPackage(jar):
 DEOBFUSCATED={
 	"paulscode"
 }
-moveToDefaultPackage(client_jar)
-moveToDefaultPackage(server_jar)
+
+if client_jar:
+	moveToDefaultPackage(client_jar)
+if server_jar:
+	moveToDefaultPackage(server_jar)
 
 print("Write the mappings files")
-with open("client.deobf", "w") as output:
-	output.write(str(client_jar))
+if client_jar:
+	with open("client.deobf", "w") as output:
+		output.write(str(client_jar))
 
-with open("server.deobf", "w") as output:
-	output.write(str(server_jar))
+if server_jar:
+	with open("server.deobf", "w") as output:
+		output.write(str(server_jar))
