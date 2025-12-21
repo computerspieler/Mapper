@@ -1,66 +1,46 @@
 from config import *
 
-class Method:
-	def __init__(self, obf_name, signature):
-		self.obf_name = obf_name
-		self.deobf_name = None
-		self.signature = signature
-		self.hasBeenRenamed = False
-
-	def setDeobfuscatedName(self, deobf_name):
-		self.deobf_name = deobf_name
-		self.hasBeenRenamed = True
-	
-	def getObfClassName(self):
-		return self.obf_name
-
-	def getDeobfClassName(self):
-		if self.deobf_name is None:
-			return self.getObfClassName()
-		else:
-			return self.deobf_name
-	
-	def __str__(self):
-		return "\tMETHOD {} {} {}\n".format(self.getObfClassName(), self.getDeobfClassName(), self.signature)
-
-class Field:
-	def __init__(self, obf_name, signature):
-		self.obf_name = obf_name
-		self.deobf_name = None
-		self.signature = signature
-		self.hasBeenRenamed = False
-
-	def setDeobfuscatedName(self, deobf_name):
-		self.deobf_name = deobf_name
-		self.hasBeenRenamed = True
-	
-	def getObfClassName(self):
-		return self.obf_name
-
-	def getDeobfClassName(self):
-		if self.deobf_name is None:
-			return self.getObfClassName()
-		else:
-			return self.deobf_name
-	
-	def __str__(self):
-		return "\tFIELD {} {} {}\n".format(self.getObfClassName(), self.getDeobfClassName(), self.signature)
-
-class Class:
+class Object:
 	def __init__(self, obf_name):
 		self.obf_name = obf_name
 		self.deobf_name = None
 		self.hasBeenRenamed = False
-		self.is_deobfuscated = False
-		self.fields = {}
-		self.methods = {}
 
-	def getObfClassName(self):
-		return self.obf_name
-	
 	def setDeobfuscatedName(self, deobf_name):
 		self.deobf_name = deobf_name
 		self.hasBeenRenamed = True
+	
+	def getObfClassName(self):
+		return self.obf_name
+
+	def getDeobfClassName(self):
+		if self.deobf_name is None:
+			return self.getObfClassName()
+		else:
+			return self.deobf_name
+
+class Method(Object):
+	def __init__(self, obf_name, signature):
+		super(Method, self).__init__(obf_name)
+		self.signature = signature
+
+	def __str__(self):
+		return "\tMETHOD {} {} {}\n".format(self.getObfClassName(), self.getDeobfClassName(), self.signature)
+
+class Field(Object):
+	def __init__(self, obf_name, signature):
+		super(Field, self).__init__(obf_name)
+		self.signature = signature
+
+	def __str__(self):
+		return "\tFIELD {} {} {}\n".format(self.getObfClassName(), self.getDeobfClassName(), self.signature)
+
+class Class(Object):
+	def __init__(self, obf_name):
+		super(Class, self).__init__(obf_name)
+		self.is_deobfuscated = False
+		self.fields = {}
+		self.methods = {}
 
 	def addField(self, obf, signature):
 		self.fields[obf] = Field(obf, signature)
@@ -82,12 +62,6 @@ class Class:
 
 	def setMethodSignature(self, obf, old_signature, signature):
 		self.methods[(obf, old_signature)].signature = signature
-
-	def getDeobfClassName(self):
-		if self.deobf_name is None:
-			return self.getObfClassName()
-		else:
-			return self.deobf_name
 
 	def __str__(self):
 		output = "CLASS {} {}\n".format(self.getObfClassName(), self.getDeobfClassName())
