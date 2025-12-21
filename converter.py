@@ -47,6 +47,7 @@ if args.server:
 
 def addCSVToFilter(archive: zipfile.ZipFile, path: str,
 	index_start_row: int,
+	column_side: Optional[int],
 	column_client_obfuscation: int,
 	column_server_obfuscation: int,
 	column_deobfuscated: int
@@ -61,11 +62,17 @@ def addCSVToFilter(archive: zipfile.ZipFile, path: str,
 		for row in reader:
 			if len(row) == 0:
 				continue
+			
+			for_the_client = row[column_client_obfuscation] != "*"
+			for_the_server = row[column_server_obfuscation] != "*"
+			if column_side:
+				for_the_client &= row[column_side] == "0"
+				for_the_server &= row[column_side] == "1"
 			# If this is a name present in the client
-			if row[column_client_obfuscation] != "*" and client_jar:
+			if for_the_client and client_jar:
 				client_jar.addToFilter(row[column_client_obfuscation], row[column_deobfuscated])
 			# If this is a name present in the server
-			if row[column_server_obfuscation] != "*" and server_jar:
+			if for_the_server and server_jar:
 				server_jar.addToFilter(row[column_server_obfuscation], row[column_deobfuscated])
 
 # Parse the RGS file
@@ -131,7 +138,8 @@ with zipfile.ZipFile(args.mcp_archive, 'r') as archive:
 	if file_path := find_path_in_archive(archive, "newids.csv"):
 		print("Read the new ids'")
 		addCSVToFilter(archive, file_path,
-			CSV_CLASS_START_ROW,
+			CSV_NEWIDS_START_ROW,
+			CSV_NEWIDS_SIDE_COL,
 			CLIENT_OBF_NEWIDS_COL,
 			SERVER_OBF_NEWIDS_COL,
 			NON_OBF_NEWIDS_COL
@@ -160,6 +168,7 @@ with zipfile.ZipFile(args.mcp_archive, 'r') as archive:
 		print("Read the methods' names")
 		addCSVToFilter(archive, file_path,
 			CSV_METHOD_START_ROW,
+			CSV_METHOD_SIDE_COL,
 			CLIENT_OBF_METHOD_COL,
 			SERVER_OBF_METHOD_COL,
 			NON_OBF_METHOD_COL
@@ -169,9 +178,20 @@ with zipfile.ZipFile(args.mcp_archive, 'r') as archive:
 		print("Read the fields' names")
 		addCSVToFilter(archive, file_path,
 			CSV_FIELD_START_ROW,
+			CSV_FIELD_SIDE_COL,
 			CLIENT_OBF_FIELD_COL,
 			SERVER_OBF_FIELD_COL,
 			NON_OBF_FIELD_COL
+		)
+
+	if file_path := find_path_in_archive(archive, "params.csv"):
+		print("Read the parameters' names")
+		addCSVToFilter(archive, file_path,
+			CSV_PARAMS_START_ROW,
+			CSV_PARAMS_SIDE_COL,
+			OBF_PARAMS_COL,
+			OBF_PARAMS_COL,
+			NON_OBF_PARAMS_COL
 		)
 
 	if client_jar:
@@ -218,6 +238,42 @@ with zipfile.ZipFile(args.mcp_archive, 'r') as archive:
 						print("Warning: The following line generated an exception")
 						print(line)
 
+	if file_path := find_path_in_archive(archive, "joined.exc"):
+		print("Parse joined.exc")
+		with archive.open(file_path) as exc_file:
+			for line in exc_file.read().splitlines():
+				line = line.decode()
+				match = re.match(r'^([^.]+)\.([^\(]+)([^\|=]+)=?\|(.*)', line)
+				if match is None:
+					continue
+				class_name = str(match.group(1))
+				method_name = str(match.group(2))
+				method_signature = str(match.group(3))
+				parameters = str(match.group(4)).split(',')
+				
+				for i, param in enumerate(parameters):
+					strike = 0
+					possible_strike = 0
+					last_error = None
+					try:
+						if client_jar:
+							possible_strike += 1
+							client_jar.setParameterName(class_name, method_name, method_signature, i+1, param)
+					except KeyError as e:
+						strike += 1
+						last_error = e
+					try:
+						if server_jar:
+							possible_strike += 1
+							server_jar.setParameterName(class_name, method_name, method_signature, i+1, param)
+					except KeyError as e:
+						strike += 1
+						last_error = e
+					if strike == possible_strike:
+						print(f"W: This line generated an error with {last_error}")
+						print(line)
+
+
 # Update the signatures
 # Every classes which isn't in a package needs to be put in
 # the "none" package, otherwise Enigma won't be happy
@@ -249,18 +305,23 @@ def removeUselessEntries(jar):
 	for c in jar.classes.copy():
 		if jar.classes[c].is_deobfuscated:
 			continue
-				
-		fields = jar.classes[c].fields.copy()
-		for of in fields:
-			if not jar.classes[c].fields[of].hasBeenRenamed:
-				jar.classes[c].fields.pop(of)
-			
-		methods = jar.classes[c].methods.copy()
-		for (om, signature) in methods:
-			if not jar.classes[c].methods[(om, signature)].hasBeenRenamed:
-				jar.classes[c].methods.pop((om, signature))
 		
-		if not jar.classes[c].hasBeenRenamed and len(jar.classes[c].methods) == 0 and len(jar.classes[c].fields) == 0:
+		fields = jar.classes[c].fields
+		for of in list(fields.keys()):
+			if not fields[of].hasBeenRenamed:
+				fields.pop(of)
+			
+		methods = jar.classes[c].methods
+		for (om, signature) in list(methods.keys()):
+			if not methods[(om, signature)].hasBeenRenamed:
+				methods.pop((om, signature))
+			else:
+				params = methods[(om, signature)].parameters
+				for id in list(params.keys()):
+					if not params[id].hasBeenRenamed:
+						params.pop(id)
+		
+		if not jar.classes[c].hasBeenRenamed and len(methods) == 0 and len(fields) == 0:
 			jar.classes.pop(c)
 
 print("Clean the map")

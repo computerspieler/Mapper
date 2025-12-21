@@ -19,13 +19,29 @@ class Object:
 		else:
 			return self.deobf_name
 
+class Parameter(Object):
+	def __init__(self, obf_name):
+		super(Parameter, self).__init__(obf_name)
+
+	def __str__(self):
+		return "\t\tARG {} {}\n".format(self.getObfClassName(), self.getDeobfClassName())
+
 class Method(Object):
 	def __init__(self, obf_name, signature):
 		super(Method, self).__init__(obf_name)
+		argument_signature = signature[signature.find('(')+1:signature.rfind(')')]
+		argument_count = len(re.findall(r'[^L]|L[^;]+;', argument_signature))
 		self.signature = signature
+		self.parameters = {i: Parameter(str(i)) for i in range(1, argument_count+1)}
+
+	def setParameterName(self, parameter_id, deobf):
+		self.parameters[parameter_id].setDeobfuscatedName(deobf)
 
 	def __str__(self):
-		return "\tMETHOD {} {} {}\n".format(self.getObfClassName(), self.getDeobfClassName(), self.signature)
+		output = "\tMETHOD {} {} {}\n".format(self.getObfClassName(), self.getDeobfClassName(), self.signature)
+		for param in self.parameters.values():
+			output += param.__str__()
+		return output
 
 class Field(Object):
 	def __init__(self, obf_name, signature):
@@ -60,16 +76,24 @@ class Class(Object):
 			print("{}({}) => {}".format(obf, signature, deobf))
 		self.methods[(obf, signature)].setDeobfuscatedName(deobf)
 
+	def setParameterName(self, methodname, method_signature, parameter_id, deobf):
+		for (_, signature), method in self.methods.items():
+			if signature != method_signature:
+				continue
+			if method.deobf_name != methodname:
+				continue
+			method.setParameterName(parameter_id, deobf)
+
 	def setMethodSignature(self, obf, old_signature, signature):
 		self.methods[(obf, old_signature)].signature = signature
 
 	def __str__(self):
 		output = "CLASS {} {}\n".format(self.getObfClassName(), self.getDeobfClassName())
-		for obf in self.fields:
-			output += self.fields[obf].__str__()
+		for field in self.fields.values():
+			output += field.__str__()
 
-		for (obf, signature) in self.methods:
-			output += self.methods[(obf, signature)].__str__()
+		for method in self.methods.values():
+			output += method.__str__()
 		
 		return output
 
@@ -86,9 +110,6 @@ class JarFile:
 
 	def setClassName(self, obf, deobf):
 		self.classes[obf].setDeobfuscatedName(deobf)
-
-	def setClassAsDeobfucated(self, obf, deobf):
-		self.classes[obf].is_deobfuscated = True
 
 	def addField(self, classname, obf, signature):
 		self.classes[classname].addField(obf, signature)
@@ -115,6 +136,21 @@ class JarFile:
 		
 		self.classes[classname].setMethodName(obf, signature, deobf)
 
+	def setParameterName(self, classname, methodname, signature, parameter_id, deobf):
+		if methodname in self.filter:
+			methodname = self.filter[methodname]
+		
+		if deobf in self.filter:
+			deobf = self.filter[deobf]
+		elif self.filtering:
+			return
+		
+		for _class in self.classes.values():
+			if _class.getDeobfClassName() == classname:
+				_class.setParameterName(methodname, signature, parameter_id, deobf)
+				return
+		raise KeyError(classname)
+
 	def setMethodSignature(self, classname, obf, old_signature, signature):
 		self.classes[classname].setMethodSignature(obf, old_signature, signature)
 
@@ -123,8 +159,8 @@ class JarFile:
 
 	def __str__(self):
 		output = ""
-		for obf in self.classes:
-			output += self.classes[obf].__str__()
+		for _class in self.classes.values():
+			output += _class.__str__()
 		return output
 
 # Read the jar files
