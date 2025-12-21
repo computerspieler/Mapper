@@ -4,11 +4,7 @@
 import argparse
 import zipfile
 import re
-
-try:
-	from StringIO import StringIO
-except ImportError:
-	from io import StringIO
+from io import StringIO
 
 from Krakatau.Krakatau.classfileformat.reader import Reader
 from Krakatau.Krakatau.classfileformat.classdata import ClassData

@@ -1,47 +1,12 @@
 #!/usr/bin/env python3
 # This script converts MCP mappings into Enigma mapping
 
-# ==== CONFIGURATION ====
-# Note: The first column's index is 0
-
-# classes.csv configuration
-CLIENT_OBF_CLASS_COL=2	# Column of the obfuscated name for the client jar
-SERVER_OBF_CLASS_COL=4	# Column of the obfuscated name for the server jar
-NON_OBF_CLASS_COL=0		# Column of the correct name
-CSV_CLASS_START_ROW=4	# Number of rows to skip at the beginning
-
-# methods.csv configuration
-CLIENT_OBF_METHOD_COL=1	# Column of the obfuscated name for the client jar
-SERVER_OBF_METHOD_COL=3	# Column of the obfuscated name for the server jar
-NON_OBF_METHOD_COL=4	# Column of the correct name
-CSV_METHOD_START_ROW=4	# Number of rows to skip at the beginning
-
-# fields.csv configuration
-CLIENT_OBF_FIELD_COL=2	# Column of the obfuscated name for the client jar
-SERVER_OBF_FIELD_COL=5	# Column of the obfuscated name for the server jar
-NON_OBF_FIELD_COL=6		# Column of the correct name
-CSV_FIELD_START_ROW=3	# Number of rows to skip at the beginning
-
-# newids.csv configuration
-CLIENT_OBF_NEWIDS_COL=0	# Column of the obfuscated name for the client jar
-SERVER_OBF_NEWIDS_COL=1	# Column of the obfuscated name for the server jar
-NON_OBF_NEWIDS_COL=2	# Column of the correct name
-CSV_NEWIDS_START_ROW=0	# Number of rows to skip at the beginning
-
-PACKAGE_DEFAULT="net/minecraft/src/"
-PACKAGE_CONSIDERED_DEOBFUSCATED=[
-	"paulscode",
-	"com/jcraft/jorbis",
-]
-
-# ==== END OF CONFIGURATION ====
-
 import sys
-import os.path
 import zipfile
 import csv
 import argparse
 
+from config import *
 from common import *
 
 client_jar = None
@@ -79,16 +44,19 @@ if args.server:
 	with zipfile.ZipFile(args.server, 'r') as archive:
 		addSymbols(archive, server_jar)
 
-def addCSVToFilter(path: str,
+def addCSVToFilter(archive: zipfile.ZipFile, path: str,
 	index_start_row: int,
-	column_client_obfuscation: int
+	column_client_obfuscation: int,
 	column_server_obfuscation: int,
 	column_deobfuscated: int
 ):
-	with open(path, "r") as csv_file:
-		reader = csv.reader(csv_file)
+	with archive.open(path) as csv_file:
+		reader = csv.reader(map(
+			lambda line: line.decode(),
+			csv_file.read().splitlines()
+		))
 		for i in range(index_start_row):
-			next(csv_file)
+			next(reader)
 		for row in reader:
 			if len(row) == 0:
 				continue
@@ -98,50 +66,6 @@ def addCSVToFilter(path: str,
 			# If this is a name present in the server
 			if row[column_server_obfuscation] != "*" and server_jar:
 				server_jar.addToFilter(row[column_server_obfuscation], row[column_deobfuscated])
-
-		csv_file.close()
-
-if os.path.exists("newids.csv"):
-	print("Read the new ids'")
-	addCSVToFilter("newids.csv",
-		CLIENT_OBF_NEWIDS_COL,
-		SERVER_OBF_NEWIDS_COL,
-		NON_OBF_NEWIDS_COL
-	)
-
-if os.path.exists("classes.csv"):
-	print("Read the classes' names")
-	with open("classes.csv", "r") as csv_file:
-		reader = csv.reader(csv_file)
-		for i in range(CSV_CLASS_START_ROW):
-			next(csv_file)
-		for row in reader:
-			if len(row) == 0:
-				continue
-			# If this is a name present in the client
-			if row[CLIENT_OBF_CLASS_COL] != "*" and client_jar:
-				client_jar.setClassName(row[CLIENT_OBF_CLASS_COL], row[NON_OBF_CLASS_COL])
-			# If this is a name present in the server
-			if row[SERVER_OBF_CLASS_COL] != "*" and server_jar:
-				server_jar.setClassName(row[SERVER_OBF_CLASS_COL], row[NON_OBF_CLASS_COL])
-
-		csv_file.close()
-
-if os.path.exists("methods.csv"):
-	print("Read the methods' names")
-	addCSVToFilter("methods.csv",
-		CLIENT_OBF_METHOD_COL,
-		SERVER_OBF_METHOD_COL,
-		NON_OBF_METHOD_COL
-	)
-
-if os.path.exists("fields.csv"):
-	print("Read the fields' names")
-	addCSVToFilter("fields.csv",
-		CLIENT_OBF_FIELD_COL,
-		SERVER_OBF_FIELD_COL,
-		NON_OBF_FIELD_COL
-	)
 
 # Parse the RGS file
 def parse_names(name):
@@ -178,7 +102,7 @@ def parse_line_rgs(line: str, jar):
 		signature = method_match.group(2)
 		jar.setMethodName(classname, name, signature, name)
 
-def parse_line_srg(line, jar):
+def parse_line_srg(line: str, jar):
 	class_match = re.search (r"^CL: ([^ ]+) ([^ ]+)$", line)
 	field_match = re.search (r"^FD: ([^ ]+) ([^ ]+)$", line)
 	method_match = re.search(r"^MD: ([^ ]+) ([^ ]+) ([^ ]+)", line)
@@ -195,27 +119,99 @@ def parse_line_srg(line, jar):
 		_, deobf_name = parse_names(method_match.group(3))
 		jar.setMethodName(classname, name, signature, deobf_name)
 
-if os.path.exists("minecraft.rgs") and client_jar:
-	print("Parse minecraft.rgs")
-	with open("minecraft.rgs") as rgs_file:
-		for line in rgs_file:
-			parse_line_rgs(line, client_jar)
-if os.path.exists("minecraft.srg") and client_jar:
-	print("Parse minecraft.srg")
-	with open("minecraft.srg") as srg_file:
-		for line in srg_file:
-			parse_line_srg(line, client_jar)
+with zipfile.ZipFile(args.mcp_archive, 'r') as archive:
+	for file_path in archive.namelist():
+		filename = file_path[max(file_path.rfind('/'), file_path.rfind('\\'))+1:]
+		
+		if filename == "newids.csv":
+			print("Read the new ids'")
+			addCSVToFilter(archive, file_path,
+				CSV_CLASS_START_ROW,
+				CLIENT_OBF_NEWIDS_COL,
+				SERVER_OBF_NEWIDS_COL,
+				NON_OBF_NEWIDS_COL
+			)
 
-if os.path.exists("minecraft_server.rgs") and server_jar:
-	print("Parse minecraft_server.rgs")
-	with open("minecraft_server.rgs") as rgs_file:
-		for line in rgs_file:
-			parse_line_rgs(line, server_jar)
-if os.path.exists("minecraft_server.srg") and server_jar:
-	print("Parse minecraft_server.srg")
-	with open("minecraft_server.srg") as srg_file:
-		for line in srg_file:
-			parse_line_srg(line, server_jar)
+		if filename == "classes.csv":
+			print("Read the classes' names")
+			with archive.open(file_path) as csv_file:
+				reader = csv.reader(map(
+					lambda line: line.decode(),
+					csv_file.read().splitlines()
+				))
+				for line, row in enumerate(reader):
+					if line < CSV_CLASS_START_ROW:
+						continue
+					if len(row) == 0:
+						continue
+					# If this is a name present in the client
+					if row[CLIENT_OBF_CLASS_COL] != "*" and client_jar:
+						client_jar.setClassName(row[CLIENT_OBF_CLASS_COL], row[NON_OBF_CLASS_COL])
+					# If this is a name present in the server
+					if row[SERVER_OBF_CLASS_COL] != "*" and server_jar:
+						server_jar.setClassName(row[SERVER_OBF_CLASS_COL], row[NON_OBF_CLASS_COL])
+
+		if filename == "methods.csv":
+			print("Read the methods' names")
+			addCSVToFilter(archive, file_path,
+				CSV_METHOD_START_ROW,
+				CLIENT_OBF_METHOD_COL,
+				SERVER_OBF_METHOD_COL,
+				NON_OBF_METHOD_COL
+			)
+
+		if filename == "fields.csv":
+			print("Read the fields' names")
+			addCSVToFilter(archive, file_path,
+				CSV_FIELD_START_ROW,
+				CLIENT_OBF_FIELD_COL,
+				SERVER_OBF_FIELD_COL,
+				NON_OBF_FIELD_COL
+			)
+
+		if client_jar:
+			if filename == "minecraft.rgs":
+				print("Parse minecraft.rgs")
+				with archive.open(file_path) as rgs_file:
+					for line in rgs_file.read().splitlines():
+						line = line.decode()
+						try:
+							parse_line_rgs(line, client_jar)
+						except KeyError as e:
+							print("Warning: The following line generated an exception")
+							print(line)
+			if filename == "minecraft.srg":
+				print("Parse minecraft.srg")
+				with archive.open(file_path) as srg_file:
+					for line in srg_file.read().splitlines():
+						line = line.decode()
+						try:
+							parse_line_srg(line, client_jar)
+						except KeyError as e:
+							print("Warning: The following line generated an exception")
+							print(line)
+
+		if server_jar:
+			if filename == "minecraft_server.rgs":
+				print("Parse minecraft_server.rgs")
+				with archive.open(file_path) as rgs_file:
+					for line in rgs_file.read().splitlines():
+						line = line.decode()
+						try:
+							parse_line_rgs(line, server_jar)
+						except KeyError as e:
+							print("Warning: The following line generated an exception")
+							print(line)
+			if filename == "minecraft_server.srg":
+				print("Parse minecraft_server.srg")
+				with archive.open(file_path) as srg_file:
+					for line in srg_file.read().splitlines():
+						line = line.decode()
+						try:
+							parse_line_srg(line, server_jar)
+						except KeyError as e:
+							print("Warning: The following line generated an exception")
+							print(line)
 
 # Update the signatures
 # Every classes which isn't in a package needs to be put in

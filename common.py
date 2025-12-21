@@ -1,3 +1,5 @@
+from config import *
+
 class Method:
 	def __init__(self, obf_name, signature):
 		self.obf_name = obf_name
@@ -158,10 +160,7 @@ from Krakatau.Krakatau.classfileformat.classdata import ClassData
 from Krakatau.Krakatau.assembler.disassembly import Disassembler
 
 import re
-try:
-	from StringIO import StringIO
-except ImportError:
-	from io import StringIO
+from io import StringIO
 
 def readArchive(archive, name):
 	with archive.open(name.decode('utf8')) as f:
